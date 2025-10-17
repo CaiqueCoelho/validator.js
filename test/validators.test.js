@@ -424,6 +424,12 @@ describe('Validators', () => {
         'http://[2010:836B:4179::836B:4179]',
         'http://example.com/example.json#/foo/bar',
         'http://1337.com',
+        // TODO: those should not be marked as valid URLs; CVE-2025-56200
+        /* eslint-disable no-script-url */
+        'javascript:%61%6c%65%72%74%28%31%29@example.com',
+        'http://evil-site.com@example.com/',
+        'ｊａｖａｓｃｒｉｐｔ:alert(1)@example.com',
+        /* eslint-enable no-script-url */
       ],
       invalid: [
         'http://localhost:3000/',
@@ -466,6 +472,18 @@ describe('Validators', () => {
         '////foobar.com',
         'http:////foobar.com',
         'https://example.com/foo/<script>alert(\'XSS\')</script>/',
+        // the following tests are because of CVE-2025-56200
+        /* eslint-disable no-script-url */
+        "javascript:alert(1);a=';@example.com/alert(1)'",
+        'JaVaScRiPt:alert(1)@example.com',
+        'javascript:/* comment */alert(1)@example.com',
+        'javascript:var a=1; alert(a);@example.com',
+        'javascript:alert(1)@user@example.com',
+        'javascript:alert(1)@example.com?q=safe',
+        'data:text/html,<script>alert(1)</script>@example.com',
+        'vbscript:msgbox("XSS")@example.com',
+        '//evil-site.com/path@example.com',
+        /* eslint-enable no-script-url */
       ],
     });
   });
@@ -704,6 +722,21 @@ describe('Validators', () => {
     });
   });
 
+  it('should validate authentication strings if a protocol is not required', () => {
+    test({
+      validator: 'isURL',
+      args: [{
+        require_protocol: false,
+      }],
+      valid: [
+        'user:pw@foobar.com/',
+      ],
+      invalid: [
+        'user:pw,@foobar.com/',
+      ],
+    });
+  });
+
   it('should let users specify a host whitelist', () => {
     test({
       validator: 'isURL',
@@ -782,6 +815,24 @@ describe('Validators', () => {
     });
   });
 
+  it('GHSA-9965-vmph-33xx vulnerability - protocol delimiter parsing difference', () => {
+    const DOMAIN_WHITELIST = ['example.com'];
+
+    test({
+      validator: 'isURL',
+      args: [{
+        protocols: ['https'],
+        host_whitelist: DOMAIN_WHITELIST,
+        require_host: false,
+      }],
+      valid: [],
+      invalid: [
+        // eslint-disable-next-line no-script-url
+        "javascript:alert(1);a=';@example.com/alert(1)",
+      ],
+    });
+  });
+
   it('should allow rejecting urls containing authentication information', () => {
     test({
       validator: 'isURL',
@@ -810,6 +861,65 @@ describe('Validators', () => {
         '@example.com',
         ':@example.com',
         ':example.com',
+      ],
+    });
+  });
+
+  it('should reject auth-like patterns when require_protocol is true', () => {
+    test({
+      validator: 'isURL',
+      args: [{ require_protocol: true }],
+      valid: [
+        'http://user:password@example.com',
+        'https://user@example.com',
+      ],
+      invalid: [
+        'user:password@example.com',
+        'user:pass@foobar.com/',
+        'username:pw@host.com',
+      ],
+    });
+  });
+
+  it('should detect and reject malicious protocols with @ symbols', () => {
+    test({
+      validator: 'isURL',
+      args: [{
+        protocols: ['https'],
+        require_valid_protocol: true,
+      }],
+      valid: [
+        'https://example.com',
+        'https://user:pass@example.com',
+      ],
+      invalid: [
+        // eslint-disable-next-line no-script-url
+        'javascript:alert(1);@example.com',
+        // eslint-disable-next-line no-script-url
+        'javascript:void(0);@example.com',
+        'data:text/html,<script>alert(1)</script>@example.com',
+        'file:something;invalid@host.com',
+        'custom:test();@example.com',
+      ],
+    });
+  });
+
+  it('should handle protocols without slashes and no @ symbol', () => {
+    test({
+      validator: 'isURL',
+      args: [{
+        protocols: ['http', 'https'],
+        require_valid_protocol: true,
+      }],
+      valid: [
+        'http://example.com',
+        'https://example.com',
+      ],
+      invalid: [
+        'mailto:test@example.com',
+        'tel:123456',
+        'data:text/plain,hello',
+        'ftp:example.com',
       ],
     });
   });
