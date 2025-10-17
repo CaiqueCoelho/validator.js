@@ -965,6 +965,162 @@ describe('Validators', () => {
     });
   });
 
+  it('should validate IPv6 URLs with ports', () => {
+    test({
+      validator: 'isURL',
+      valid: [
+        'http://[2001:db8::1]:8080',
+        'http://[::1]:3000',
+        'http://[fe80::1]:80',
+        'https://[2001:0db8:85a3:0000:0000:8a2e:0370:7334]:443',
+      ],
+      invalid: [
+        'http://[2001:db8::1]:0',
+        'http://[2001:db8::1]:99999',
+        'http://[2001:db8::1]:-1',
+        'http://[not:valid:ipv6]:8080',
+      ],
+    });
+  });
+
+  it('should validate URLs with IPv6 and no port', () => {
+    test({
+      validator: 'isURL',
+      valid: [
+        'http://[2001:db8::1]',
+        'http://[::1]',
+        'http://[fe80::1]',
+      ],
+      invalid: [
+        'http://[invalid]',
+        'http://[gggg::1]',
+      ],
+    });
+  });
+
+  it('should handle additional host whitelist scenarios', () => {
+    test({
+      validator: 'isURL',
+      args: [{
+        host_whitelist: ['example.com', 'test.org'],
+      }],
+      valid: [
+        'http://example.com',
+        'https://example.com:8080',
+        'http://test.org',
+        'example.com',
+      ],
+      invalid: [
+        'http://other.com',
+        'http://notlisted.net',
+        'invalid.io',
+      ],
+    });
+  });
+
+  it('should validate URLs with empty host when require_host is false', () => {
+    test({
+      validator: 'isURL',
+      args: [{
+        require_host: false,
+        protocols: ['file', 'custom'],
+        require_tld: false,
+      }],
+      valid: [
+        'file:///',
+        'custom:///path',
+      ],
+      invalid: [
+        'http://',
+        'https://',
+        'custom://',
+      ],
+    });
+  });
+
+  it('should validate URLs with authentication containing multiple colons', () => {
+    test({
+      validator: 'isURL',
+      args: [{ require_tld: false }],
+      valid: [
+        'http://user:pass@example.com',
+        'http://user:pass@localhost',
+        'user:pass@example.com',
+      ],
+      invalid: [
+        'http://user:pass:extra@example.com',
+        'user:pass:extra@example.com',
+      ],
+    });
+  });
+
+  it('should validate URLs with various port edge cases', () => {
+    test({
+      validator: 'isURL',
+      valid: [
+        'http://example.com:1',
+        'http://example.com:65535',
+        'http://192.168.1.1:8080',
+      ],
+      invalid: [
+        'http://example.com:0',
+        'http://example.com:65536',
+        'http://example.com:-1',
+        'http://example.com:abc',
+        'http://example.com:12.34',
+      ],
+    });
+  });
+
+  it('should validate URLs with multiple colons in hostname port section', () => {
+    test({
+      validator: 'isURL',
+      args: [{
+        protocols: ['sftp'],
+        require_tld: false,
+      }],
+      valid: [
+        'sftp://user:pass@host:/path',
+      ],
+      invalid: [
+        'sftp://host::123',
+        'sftp://host:abc:def',
+      ],
+    });
+  });
+
+  it('should properly reject invalid IPv6 addresses', () => {
+    test({
+      validator: 'isURL',
+      valid: [
+        'http://[2001:db8::1]',
+        'http://[::ffff:192.0.2.1]',
+      ],
+      invalid: [
+        'http://[gggg::1]',
+        'http://[12345::1]',
+        'http://[:::]',
+      ],
+    });
+  });
+
+  it('should handle host blacklist correctly', () => {
+    test({
+      validator: 'isURL',
+      args: [{
+        host_blacklist: ['blocked.com', 'spam.org'],
+      }],
+      valid: [
+        'http://allowed.com',
+        'http://example.org',
+      ],
+      invalid: [
+        'http://blocked.com',
+        'http://spam.org',
+      ],
+    });
+  });
+
   it('should validate MAC addresses', () => {
     test({
       validator: 'isMACAddress',
